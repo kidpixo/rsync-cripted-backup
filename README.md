@@ -17,11 +17,10 @@ My layout is :
     - volume-root : root system , mounted on `/`
     - volume-home : user homes, mounted a `/home`
 
-The idea is to create a new external disk with the extact same layout (LVM on LUKS), with different UUID, and rsync everything.
-A copy of the updated fstab and systemd-boot for each disk with updatd UUID are mantained in the configuration and copied over the disk after the rsync.
+The idea is to create a new external disk with the exact same layout (LVM on LUKS), with different UUID, and rsync everything.
+A copy of the updated fstab and systemd-boot for each disk with updated UUID are maintained in the configuration and copied over the disk after the rsync.
 
 The resulting disks are bootable copies of the original disk, making possible to plug them in and start from the point of the last backup.
-
 
 The main script, [`rsync_crypted_backup.sh`](scripts/rsync_crypted_backup.sh), handles backup operations, 
 including checking for external disks, mounting them, and performing the backup using your specified configuration.
@@ -34,19 +33,18 @@ rsync-cripted-backup
 ├── scripts
 │   └── rsync_crypted_backup.sh       # Main backup script
 ├── config
+│   ├── external_disk_notes.json      # Optional: notes about external disks
 │   └── rsync_crypted_backup.conf     # Example configuration file
 └── README.md                         # Documentation for the project
 ```
 
-Optionally you can put a json file in `CONFIG_DIR="$HOME/.config/rsync_backup"` called `external_disk_paths.json` like :
+Optionally you can put a json file in `CONFIG_DIR="$HOME/.config/rsync_backup"` called `external_disk_notes.json` like :
 
 ```json
 {
  "disk_UUID" : "Comment, old crappy disk" 
 }
 ```
-
-and use 
 
 ## Installation Instructions
 
@@ -94,13 +92,7 @@ Start the backup process:
 b_rsync
 ```
 
-5. **Unmount and close the encrypted disk**
-
-```sh
-b_close_external_disks
-```
-
-6. When finished, **safely unmount and close the encrypted disks**
+5. When finished, **safely unmount and close the encrypted disks**
 
 ```sh
 b_close_external_disks
@@ -110,7 +102,6 @@ Note:
 
 - Each command above is an alias for a function defined in the script.
 - Always check the status before running b_rsync to avoid accidental data loss or backup to the wrong disk.
-
 
 - Before running the script, configure your backup settings in:
   ```
@@ -151,7 +142,7 @@ This script is designed to make a full, encrypted backup of your system to an ex
    - The script copies the saved `fstab` and bootloader entries from the config directory to the appropriate locations on the backup disk.
 
 7. **Unmount and Close the Disk**
-   - After the backup, you should unmount the LVM partitions and close the encrypted container. (If implemented, use `backup_close_external_disks`.)
+   - After the backup, you should unmount the LVM partitions and close the encrypted container. (Use `backup_close_external_disks`.)
 
 8. **Disconnect the Disk**
    - Safely disconnect the external disk. Your backup is now complete and encrypted.
@@ -172,8 +163,10 @@ This script is designed to make a full, encrypted backup of your system to an ex
 | `backup_rsync`                    | `b_rsync`                | Run the backup process using rsync with configured options and exclusions.                     |
 | `backup_status`                   | `b_status`               | Show the current backup/mount status.                                                          |
 | `backup_close_external_disks`     | `b_close_external_disks` | Unmount and close the external backup disk.                                                    |
-| `prepare_new_disk`                |                          | Interactively partition, encrypt, and format a new disk for backup use (**destructive!**).     |
 | `backup_external_disk_notes`      |                          | Show notes or JSON info about external disks (if present).                                     |
+| `backup_debug_dmsetup`            | `b_debug_dmsetup`        | Show device-mapper table and status for debugging.                                             |
+| `backup_debug_cryptsetup`         | `b_debug_cryptsetup`     | Show cryptsetup mapping status for debugging.                                                  |
+| `backup_debug_lvm`                | `b_debug_lvm`            | Show LVM VG and LV info for debugging.                                                         |
 
 ---
 

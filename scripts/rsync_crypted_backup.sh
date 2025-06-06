@@ -13,6 +13,18 @@ fi
 
 # List all connected disks by-id
 list_connected_disks() {
+########################################################################
+# Function to list all connected disks by-id
+#
+# This function prints block device information using lsblk and lists all
+# connected disks matching the configured glob pattern (RCB_DISK_BY_ID_GLOB).
+#
+# Returns:
+#   None (prints output to stdout)
+#
+# Example usage:
+#   list_connected_disks
+########################################################################
   echo "lsblk :"
   lsblk -f
   echo "Connected disks at ${RCB_DISK_BY_ID_GLOB:-/dev/disk/by-id/usb-*} :"
@@ -21,11 +33,38 @@ list_connected_disks() {
 
 # List all known disk configs
 list_known_configs() {
+########################################################################
+# Function to list all known disk configurations
+#
+# This function lists all directories in the config directory, which represent
+# known disk configurations.
+#
+# Returns:
+#   None (prints output to stdout)
+#
+# Example usage:
+#   list_known_configs
+########################################################################
   find "$CONFIG_DIR" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort
 }
 
 # Prompt to create a config for a new disk
 create_disk_config() {
+########################################################################
+# Function to create a configuration for a new disk
+#
+# This function creates a new configuration directory for the specified disk,
+# and copies fstab and bootloader entries from the mounted disk to the config.
+#
+# Args:
+#   disk_id: The disk ID (by-id basename) to create a config for.
+#
+# Returns:
+#   None (prints output to stdout)
+#
+# Example usage:
+#   create_disk_config "usb-TOSHIBA_EXTERNAL_USB_20231120008590F-0:0"
+########################################################################
   local disk_id="$1"
   local config_path="$CONFIG_DIR/$disk_id"
   mkdir -p "$config_path/boot_loader_entries"
@@ -43,8 +82,48 @@ create_disk_config() {
   fi
 }
 
+backup_close_external_disks() {
+########################################################################
+# Function to close the current external disk
+#
+# This function checks the current external disk and unmounts it from the
+# specified mount point. It also deactivates the LVM volume group and
+# closes the encrypted partition.
+#
+# Returns:
+#   None
+#
+# Example usage:
+#   backup_close_external_disks
+########################################################################
+  local CURRENT_DISK=$(backup_check_disk)
+  if [ -n "$CURRENT_DISK" ]; then
+    echo "Current Disk : $CURRENT_DISK"
+    echo "Umount everything under $RCB_MOUNT_ROOT"
+    sudo umount -R "$RCB_MOUNT_ROOT"
+    echo "Deactivate $RCB_LVM_VG_NAME"
+    sudo vgchange -an "$RCB_LVM_VG_NAME"
+    echo "Close encrypted partition $RCB_LUKS_NAME"
+    sudo cryptsetup close "$RCB_LUKS_NAME"
+  else
+    echo "NO External Disk Present : STOPPING"
+  fi
+}
+
 # Select or create disk config
 select_or_create_disk_config() {
+########################################################################
+# Function to select or create a disk configuration interactively
+#
+# This function lists connected disks and known configs, prompts the user
+# to select a disk, and creates a config if needed.
+#
+# Returns:
+#   The selected disk id (prints to stdout)
+#
+# Example usage:
+#   disk_id=$(select_or_create_disk_config)
+########################################################################
   local disk_id
   echo "Connected disks:"
   list_connected_disks
@@ -92,6 +171,18 @@ backup_check_disk() {
 }
 
 backup_external_disk_notes() {
+########################################################################
+# Function to print notes about external disks
+#
+# This function prints the contents of the external_disk_notes.json file
+# if it exists, using jq for pretty-printing.
+#
+# Returns:
+#   None (prints output to stdout)
+#
+# Example usage:
+#   backup_external_disk_notes
+########################################################################
   local json_file="$CONFIG_DIR/external_disk_notes.json"
   if [[ -f "$json_file" ]]; then
     jq . "$json_file"
@@ -101,6 +192,18 @@ backup_external_disk_notes() {
 }
 
 backup_mount_external_disks() {
+########################################################################
+# Function to mount the current external disk
+#
+# This function checks the current external disk and mounts it to the
+# specified mount points, decrypts the LUKS partition, and activates LVM.
+#
+# Returns:
+#   None
+#
+# Example usage:
+#   backup_mount_external_disks
+########################################################################
   local CURRENT_DISK=$(backup_check_disk)
   if [ -n "$CURRENT_DISK" ]; then
     echo "Current Disk : $CURRENT_DISK"
@@ -115,6 +218,18 @@ backup_mount_external_disks() {
 }
 
 backup_check_mountpoints() {
+########################################################################
+# Function to check if the desired mount points are present
+#
+# This function checks if all desired mount points (from config) are present
+# in the /proc/mounts file and returns 0 if all mounts are found, 1 otherwise.
+#
+# Returns:
+#   0 if all mounts found, 1 otherwise (also prints result)
+#
+# Example usage:
+#   backup_check_mountpoints
+########################################################################
   local all_mounts=$(awk '{print $2}' /proc/mounts)
   local found=0
   for mount_point in "${RCB_DESIRED_MOUNTS[@]}"; do
@@ -128,6 +243,19 @@ backup_check_mountpoints() {
 }
 
 backup_rsync() {
+########################################################################
+# Function to perform an rsync backup of the system to an external disk.
+#
+# This function checks if the desired mount points are present and if the
+# external disk is connected. If both conditions are met, it performs the
+# backup using rsync. Otherwise, it prints a message and stops.
+#
+# Returns:
+#   None
+#
+# Example usage:
+#   backup_rsync
+########################################################################
   local green='\033[0;32m'
   local red='\033[0;31m'
   local reset='\033[0m'
@@ -179,53 +307,107 @@ backup_rsync() {
 }
 
 backup_status(){
-#######################################################################
+########################################################################
 # Function to get the status of the backup mount points and the current disk
 #
 # This function checks if the desired mount points are present in the /proc/mounts file
 # and if the current disk is set. It prints the status of each mount point and the current disk value.
 #
-# This function does not take any parameters.
+# Returns:
+#   None
 #
-# This function does not return any value.
-#######################################################################
-  # Get the current disk
+# Example usage:
+#   backup_status
+########################################################################
   local CURRENT_DISK=$(backup_check_disk)
-
-  # Define the desired mount points as an array from config
   local desired_mounts=("${RCB_DESIRED_MOUNTS[@]}")
-
-  # Define color codes for printing messages
-  local green='\033[0;32m'  # Green color code
-  local red='\033[0;31m'    # Red color code
-  local reset='\033[0m'     # Reset color code
-
-  # Show block devices and filesystems
+  local green='\033[0;32m'
+  local red='\033[0;31m'
+  local reset='\033[0m'
   lsblk -fA
   echo
-
-  # Loop through desired mount points
   for mount_point in "${desired_mounts[@]}"; do
-    # Check if mount point is present in /proc/mounts
     if grep -q "$mount_point" /proc/mounts; then
-      # Print message if mount point is mounted
       echo -e "${green}'$mount_point' is mounted.${reset}"
     else
-      # Print message if mount point is not mounted
       echo -e "${red}'$mount_point' is not mounted.${reset}"
     fi
   done
-
-  # Check if the current disk value is empty or not
   if [[ -n "$CURRENT_DISK" ]]; then
-      # Print message if current disk value is not empty
       echo -e "${green}CURRENT_DISK value is '${CURRENT_DISK}'${reset}"
   else
-      # Print message if current disk value is empty
       echo  -e "${red}CURRENT_DISK is empty.${reset}"
   fi
 }
+
+#######################################################################
+# Debugging helpers for device-mapper, cryptsetup, and LVM
+
+backup_debug_dmsetup() {
+########################################################################
+# Function to debug device-mapper
+#
+# This function prints the device-mapper table and status.
+#
+# Returns:
+#   None
+#
+# Example usage:
+#   backup_debug_dmsetup
+########################################################################
+  echo "Device-mapper table:"
+  sudo dmsetup table
+  echo
+  echo "Device-mapper status:"
+  sudo dmsetup status
+}
+
+backup_debug_cryptsetup() {
+########################################################################
+# Function to debug cryptsetup
+#
+# This function prints the status of the active cryptsetup mappings.
+#
+# Returns:
+#   None
+#
+# Example usage:
+#   backup_debug_cryptsetup
+########################################################################
+  echo "Active cryptsetup mappings:"
+  sudo cryptsetup status "$RCB_LUKS_NAME" || echo "No mapping named $RCB_LUKS_NAME"
+  echo
+  echo "All cryptsetup mappings:"
+  sudo cryptsetup -v status --all 2>/dev/null || true
+}
+
+backup_debug_lvm() {
+########################################################################
+# Function to debug LVM
+#
+# This function prints the details of LVM volume groups and logical volumes.
+#
+# Returns:
+#   None
+#
+# Example usage:
+#   backup_debug_lvm
+########################################################################
+  echo "LVM Volume Groups:"
+  sudo vgdisplay
+  echo
+  echo "LVM Logical Volumes:"
+  sudo lvdisplay
+}
+
+#######################################################################
+
 #### SHORT ALIASES
+# Add short aliases for debug helpers
+alias b_debug_dmsetup='backup_debug_dmsetup'
+alias b_debug_cryptsetup='backup_debug_cryptsetup'
+alias b_debug_lvm='backup_debug_lvm'
+
 alias b_check_disk='backup_check_disk'
 alias b_mount_external_disks='backup_mount_external_disks'
 alias b_close_external_disks='backup_close_external_disks'
