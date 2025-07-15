@@ -139,6 +139,54 @@ b_rsync
 
 ---
 
+## 📝 Per-Disk fstab & Bootloader Configuration
+
+When you clone or back up a Linux system to a new disk, the partitions on the backup disk will have different UUIDs than the original. This means you **must update** the `fstab` and systemd-boot loader entries on the backup disk to reference the new UUIDs, or the system may fail to boot.
+
+### Why Is This Important?
+
+- **fstab** tells the system how to mount partitions at boot. If the UUIDs don't match the actual disk, mounts will fail.
+- **systemd-boot loader entries** reference the root and boot partitions by UUID. Incorrect UUIDs mean the bootloader can't find the kernel or root filesystem.
+
+### How This Project Handles It
+
+- When you:w run [`create_disk_config`](scripts/rsync_crypted_backup.sh), the script:
+  - Copies the current disk's `fstab` and bootloader entries into a per-disk config directory (e.g., `~/.config/rsync_backup/<disk-id>/`).
+  - These files are then used during backup to update the backup disk's `/etc/fstab` and `/boot/loader/entries/*.conf` with the correct UUIDs.
+
+### Workflow Example
+
+1. **Mount the backup disk** using `b_mount_external_disks`.
+2. **Create or update disk config**:
+   ```sh
+   create_disk_config "usb-YourDiskID"
+   ```
+   - This snapshots the current `fstab` and bootloader entries for the disk.
+3. **Run the backup**:
+   ```sh
+   b_rsync
+   ```
+   - The script copies the per-disk `fstab` and bootloader entries to the backup disk, ensuring UUIDs match the new partitions.
+
+### Manual Editing (If Needed)
+
+If you change partition layouts or UUIDs manually, edit:
+- `/etc/fstab` on the backup disk (`$RCB_DEST_FSTAB_PATH`)
+- `/boot/loader/entries/*.conf` on the backup disk (`$RCB_DEST_BOOTLOADER_ENTRIES_PATH`)
+
+Use `lsblk -f` to find the new UUIDs and update the files accordingly.
+
+### Troubleshooting
+
+- **Boot fails or root not found?**  
+  Check that the UUIDs in `fstab` and bootloader entries match those of the backup disk's partitions.
+- **Mount errors?**  
+  Use `b_status` and `lsblk -f` to verify mount points and UUIDs.
+
+---
+
+**Tip:** Always verify bootability after backup by testing the backup disk on real hardware or a VM.
+
 ## 🧩 Scannable Reference
 
 ### **Main Functions & Aliases**
